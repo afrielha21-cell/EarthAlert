@@ -1,0 +1,60 @@
+name: Deploy EarthAlert WebGIS
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'EarthAlert_WebGIS_Deploy_Terbaru_OMI_2026.zip'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '13 */3 * * *'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: github-pages-earthalert
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Check source archive
+        id: source
+        shell: bash
+        run: |
+          if test -f EarthAlert_WebGIS_Deploy_Terbaru_OMI_2026.zip; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'Upload EarthAlert_WebGIS_Deploy_Terbaru_OMI_2026.zip to the repository root to activate deployment.'
+          fi
+      - name: Extract complete EarthAlert site
+        if: steps.source.outputs.present == 'true'
+        run: |
+          mkdir -p _site
+          unzip -q -o EarthAlert_WebGIS_Deploy_Terbaru_OMI_2026.zip -d _site
+          test -s _site/index.html
+          test -s _site/app.js
+          test -s _site/data/events.json
+          test -s _site/assets/ocean.jpg
+      - name: Refresh official BMKG snapshot (best effort)
+        if: steps.source.outputs.present == 'true'
+        run: python3 _site/scripts/sync_bmkg.py || true
+      - name: Configure GitHub Pages
+        if: steps.source.outputs.present == 'true'
+        uses: actions/configure-pages@v5
+      - name: Upload EarthAlert static site
+        if: steps.source.outputs.present == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Publish GitHub Pages
+        if: steps.source.outputs.present == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
